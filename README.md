@@ -1,4 +1,4 @@
-# Rook - CEPH Helm-stack
+# Rook - CEPH External Helm-stack
 
 ![](img/image-1.png)
 
