@@ -1,0 +1,358 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ceph-cluster
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://charts.rook.io/release'
+    chart: rook-ceph-cluster
+    targetRevision: 1.14.8
+    helm:
+      values: |-
+
+        operatorNamespace: rook-ceph
+        configOverride:
+        # configOverride: |
+        #   [global]
+        #   mon_allow_pool_delete = true
+        #   osd_pool_default_size = 3
+        #   osd_pool_default_min_size = 2
+
+        # Installs a debugging toolbox deployment
+        toolbox:
+          enabled: true
+          # -- Toolbox image, defaults to the image used by the Ceph cluster
+          image: #quay.io/ceph/ceph:v18.2.2
+          tolerations: []
+          affinity: {}
+          containerSecurityContext:
+            runAsNonRoot: true
+            runAsUser: 2016
+            runAsGroup: 2016
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            limits:
+              memory: "1Gi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+          priorityClassName:
+
+        monitoring:
+          enabled: false
+          createPrometheusRules: false
+          rulesNamespaceOverride:
+          prometheusRule:
+            labels: {}
+            annotations: {}
+
+        # -- Create & use PSP resources. Set this to the same value as the rook-ceph chart.
+        pspEnable: false
+        cephClusterSpec:
+          cephVersion:
+            image: quay.io/ceph/ceph:v18.2.2
+            allowUnsupported: false
+          dataDirHostPath: /var/lib/rook
+          skipUpgradeChecks: false
+          continueUpgradeAfterChecksEvenIfNotHealthy: false
+          waitTimeoutForHealthyOSDInMinutes: 10
+
+          mon:
+            count: 3
+            allowMultiplePerNode: false
+
+          mgr:
+            count: 2
+            allowMultiplePerNode: false
+            modules:
+              - name: pg_autoscaler
+                enabled: true
+              - name: rook
+                enabled: true
+              - name: prometheus
+                enabled: true
+
+          # enable the ceph dashboard for viewing cluster status
+          dashboard:
+            enabled: true
+            ssl: false
+          #  prometheusEndpoint: http://x.x.x.x:9090
+          #  prometheusEndpointSSLVerify: false
+
+          # Network configuration, see: https://github.com/rook/rook/blob/master/Documentation/CRDs/ceph-cluster-crd.md#network-configuration-settings
+          network:
+            provider: host
+          crashCollector:
+            disable: false
+
+          # enable log collector, daemons will log on files and rotate
+          logCollector:
+            enabled: true
+            periodicity: daily # one of: hourly, daily, weekly, monthly
+            maxLogSize: 500M # SUFFIX may be 'M' or 'G'. Must be at least 1M.
+
+          # automate [data cleanup process](https://github.com/rook/rook/blob/master/Documentation/Storage-Configuration/ceph-teardown.md#delete-the-data-on-hosts) in cluster destruction.
+          cleanupPolicy:
+            confirmation: ""
+            sanitizeDisks:
+              method: quick
+              dataSource: zero
+              iteration: 1
+            allowUninstallWithVolumes: false
+          placement:
+            all:
+              nodeAffinity:
+                requiredDuringSchedulingIgnoredDuringExecution:
+                  nodeSelectorTerms:
+                  - matchExpressions:
+                    - key: role
+                      operator: In
+                      values:
+                      - storage-node
+          resources:
+            mgr:
+              limits:
+                memory: "1Gi"
+              requests:
+                cpu: "500m"
+                memory: "512Mi"
+            mon:
+              limits:
+                memory: "2Gi"
+              requests:
+                cpu: "1000m"
+                memory: "1Gi"
+            osd:
+              limits:
+                memory: "4Gi"
+              requests:
+                cpu: "1000m"
+                memory: "4Gi"
+            prepareosd:
+              requests:
+                cpu: "500m"
+                memory: "50Mi"
+            mgr-sidecar:
+              limits:
+                memory: "100Mi"
+              requests:
+                cpu: "100m"
+                memory: "40Mi"
+            crashcollector:
+              limits:
+                memory: "60Mi"
+              requests:
+                cpu: "100m"
+                memory: "60Mi"
+            logcollector:
+              limits:
+                memory: "1Gi"
+              requests:
+                cpu: "100m"
+                memory: "100Mi"
+            cleanup:
+              limits:
+                memory: "1Gi"
+              requests:
+                cpu: "500m"
+                memory: "100Mi"
+            exporter:
+              limits:
+                memory: "128Mi"
+              requests:
+                cpu: "50m"
+                memory: "50Mi"
+
+          # The option to automatically remove OSDs that are out and are safe to destroy.
+          removeOSDsIfOutAndSafeToRemove: false
+
+          # priority classes to apply to ceph resources
+          priorityClassNames:
+            mon: system-node-critical
+            osd: system-node-critical
+            mgr: system-cluster-critical
+
+          storage: # cluster level storage configuration and selection
+            useAllNodes: true
+            useAllDevices: true
+
+          # The section for configuring management of daemon disruptions during upgrade or fencing.
+          disruptionManagement:
+            managePodBudgets: true
+            osdMaintenanceTimeout: 30
+            pgHealthCheckTimeout: 0
+
+          # Configure the healthcheck and liveness probes for ceph pods.
+          # Valid values for daemons are 'mon', 'osd', 'status'
+          healthCheck:
+            daemonHealth:
+              mon:
+                disabled: false
+                interval: 45s
+              osd:
+                disabled: false
+                interval: 60s
+              status:
+                disabled: false
+                interval: 60s
+            # Change pod liveness probe, it works for all mon, mgr, and osd pods.
+            livenessProbe:
+              mon:
+                disabled: false
+              mgr:
+                disabled: false
+              osd:
+                disabled: false
+
+        # -- A list of CephBlockPool configurations to deploy
+        # @default -- See [below](#ceph-block-pools)
+        cephBlockPools:
+          - name: ceph-blockpool
+            # see https://github.com/rook/rook/blob/master/Documentation/CRDs/Block-Storage/ceph-block-pool-crd.md#spec for available configuration
+            spec:
+              failureDomain: host
+              replicated:
+                size: 3
+            storageClass:
+              enabled: true
+              name: ceph-block
+              isDefault: true
+              reclaimPolicy: Delete
+              allowVolumeExpansion: true
+              volumeBindingMode: "Immediate"
+              mountOptions: []
+              # see https://kubernetes.io/docs/concepts/storage/storage-classes/#allowed-topologies
+              allowedTopologies: []
+              parameters:
+                imageFormat: "2"
+                imageFeatures: layering
+
+                # These secrets contain Ceph admin credentials.
+                csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+                csi.storage.k8s.io/provisioner-secret-namespace: "rook-ceph"
+                csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+                csi.storage.k8s.io/controller-expand-secret-namespace: "rook-ceph"
+                csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+                csi.storage.k8s.io/node-stage-secret-namespace: "rook-ceph"
+                csi.storage.k8s.io/fstype: ext4
+
+        # -- A list of CephFileSystem configurations to deploy
+        # @default -- See [below](#ceph-file-systems)
+        cephFileSystems:
+          - name: didak-fs
+            # see https://github.com/rook/rook/blob/master/Documentation/CRDs/Shared-Filesystem/ceph-filesystem-crd.md#filesystem-settings for available configuration
+            spec:
+              metadataPool:
+                replicated:
+                  size: 3
+              dataPools:
+                - failureDomain: host
+                  replicated:
+                    size: 3
+                  # Optional and highly recommended, 'data0' by default, see https://github.com/rook/rook/blob/master/Documentation/CRDs/Shared-Filesystem/ceph-filesystem-crd.md#pools
+                  name: data0
+              metadataServer:
+                activeCount: 1
+                activeStandby: true
+                resources:
+                  limits:
+                    memory: "4Gi"
+                  requests:
+                    cpu: "1000m"
+                    memory: "4Gi"
+                priorityClassName: system-cluster-critical
+            storageClass:
+              enabled: true
+              isDefault: false
+              name: ceph-filesystem
+              # (Optional) specify a data pool to use, must be the name of one of the data pools above, 'data0' by default
+              pool: data0
+              reclaimPolicy: Delete
+              allowVolumeExpansion: true
+              volumeBindingMode: "Immediate"
+              mountOptions: []
+              # see https://github.com/rook/rook/blob/master/Documentation/Storage-Configuration/Shared-Filesystem-CephFS/filesystem-storage.md#provision-storage for available configuration
+              parameters:
+                # The secrets contain Ceph admin credentials.
+                csi.storage.k8s.io/provisioner-secret-name: rook-csi-cephfs-provisioner
+                csi.storage.k8s.io/provisioner-secret-namespace: "rook-ceph"
+                csi.storage.k8s.io/controller-expand-secret-name: rook-csi-cephfs-provisioner
+                csi.storage.k8s.io/controller-expand-secret-namespace: "rook-ceph"
+                csi.storage.k8s.io/node-stage-secret-name: rook-csi-cephfs-node
+                csi.storage.k8s.io/node-stage-secret-namespace: "rook-ceph"
+                # Specify the filesystem type of the volume. If not specified, csi-provisioner
+                # will set default as `ext4`. Note that `xfs` is not recommended due to potential deadlock
+                # in hyperconverged settings where the volume is mounted on the same node as the osds.
+                csi.storage.k8s.io/fstype: ext4
+
+        # -- Settings for the filesystem snapshot class
+        # @default -- See [CephFS Snapshots](../Storage-Configuration/Ceph-CSI/ceph-csi-snapshot.md#cephfs-snapshots)
+        cephFileSystemVolumeSnapshotClass:
+          enabled: false
+          name: ceph-filesystem
+          isDefault: true
+          deletionPolicy: Delete
+          annotations: {}
+          labels: {}
+          # see https://rook.io/docs/rook/v1.10/Storage-Configuration/Ceph-CSI/ceph-csi-snapshot/#cephfs-snapshots for available configuration
+          parameters: {}
+
+        # -- Settings for the block pool snapshot class
+        # @default -- See [RBD Snapshots](../Storage-Configuration/Ceph-CSI/ceph-csi-snapshot.md#rbd-snapshots)
+        cephBlockPoolsVolumeSnapshotClass:
+          enabled: false
+          name: ceph-block
+          isDefault: false
+          deletionPolicy: Delete
+          annotations: {}
+          labels: {}
+          # see https://rook.io/docs/rook/v1.10/Storage-Configuration/Ceph-CSI/ceph-csi-snapshot/#rbd-snapshots for available configuration
+          parameters: {}
+
+        # -- A list of CephObjectStore configurations to deploy
+        # @default -- See [below](#ceph-object-stores)
+                # -- A list of CephObjectStore configurations to deploy
+        # @default -- See [below](#ceph-object-stores)
+        cephObjectStores:
+          - name: didak-s3
+            # see https://github.com/rook/rook/blob/master/Documentation/CRDs/Object-Storage/ceph-object-store-crd.md#object-store-settings for available configuration
+            spec:
+              metadataPool:
+                failureDomain: host
+                replicated:
+                  size: 3
+              dataPool:
+                failureDomain: host
+                erasureCoded:
+                  dataChunks: 2
+                  codingChunks: 1
+              preservePoolsOnDelete: false
+              gateway:
+                port: 80
+                resources:
+                  limits:
+                    memory: "2Gi"
+                  requests:
+                    cpu: "1000m"
+                    memory: "1Gi"
+                instances: 3
+                priorityClassName: system-cluster-critical
+            storageClass:
+              enabled: false
+            healthCheck:
+              bucket:
+                disabled: false
+                interval: 60s            
+            ingress:
+              # Enable an ingress for the ceph-objectstore
+              enabled: false
+        csiDriverNamePrefix:
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: rook-ceph
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true

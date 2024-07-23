@@ -1,0 +1,92 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argocd
+spec:
+  project: default
+  source:
+    path: prometheus-stack
+    repoURL: 'https://prometheus-community.github.io/helm-charts'
+    chart: kube-prometheus-stack
+    targetRevision: 61.2.0
+    helm:
+      values: |-
+        grafana:
+          defaultDashboardsTimezone: Europe/Istanbul
+          persistence:
+            storageClassName: ceph-block
+            accessModes: ["ReadWriteOnce"]
+            enabled: true
+            size: 1Gi
+          service:
+            type: NodePort
+            nodePort: 30006
+        prometheus:
+          serviceMonitorSelector:
+            matchLabels:
+              team: rook
+          serviceMonitorNamespaceSelector:
+            matchNames:
+              - rook-ceph
+          prometheusSpec:
+            podMonitorSelectorNilUsesHelmValues: false
+            probeSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+            serviceMonitorSelectorNilUsesHelmValues: false
+            retention: 14d
+            retentionSize: 50GiB
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: ceph-block
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 60Gi
+          resources:
+            limits:
+              memory: 4000Mi
+            requests:
+              memory: 4000Mi       
+          service:
+            type: NodePort
+            nodePort: 30005
+        alertmanager:
+          config:
+            route:
+              receiver: 'didak-msteams'
+              group_wait: 1m
+              group_interval: 5m
+              repeat_interval: 1h
+              group_by: ['job', 'alertname', 'priority','namespace']
+            receivers:
+            - name: 'null'
+            - name: 'didak-msteams'
+              msteams_configs:
+                - webhook_url: 'xxxxxx'
+                  send_resolved: true
+          alertmanagerSpec:
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: ceph-block
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 2Gi
+          service:
+            type: NodePort
+            nodePort: 30007
+        thanosRuler:
+          enabled: false
+        kubeProxy:
+          enabled: false       
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      - ServerSideApply=true
