@@ -19,7 +19,7 @@ Rook, küme dışında kurulu olan herhangi bir Ceph veya Rook depolama sistemin
 * Worker düğümlerde,  bölümlendirilmemiş/biçimlendirilmiş dosya sistemi olmayan disk/diskler.
 * Her düğümde NTP senkronizasyonu sağlanmalı
 * [Gereksinim detayları](https://rook.io/docs/rook/latest-release/Getting-Started/Prerequisites/prerequisites/)
-* [Kurulumda uygulabilecek iyi pratikler](https://documentation.suse.com/sbp/storage/html/SBP-rook-ceph-kubernetes/index.html)
+* [Kurulumda için iyi pratikler](https://documentation.suse.com/sbp/storage/html/SBP-rook-ceph-kubernetes/index.html)
  
 ### Kurulum
 
@@ -32,7 +32,8 @@ for i in {4..11}; do kubectl label nodes node$i role=storage-node; done
 2-) ArgoCD üzerinden **rook-operator** (helm-stack altında) projesi oluşturularak senkronize edilir. Senkronizasyon tamamlandığında **rook-ceph** namespace'inde *rook-ceph-operator* podu görülür.
 
 
-3-) PersistentVolumeClaims (PVC) üzerine annotasyon ekleyerek alan geri kazanma işlemini (ReclaimSpaceCronJob) için  [csi-addons](https://github.com/csi-addons/kubernetes-csi-addons/tree/main) kurulumu yapılır:
+3-) PersistentVolumeClaims (PVC) üzerine annotasyon ekleyerek CEPH'de alan geri kazanma işlemi [(ReclaimSpaceCronJob)](https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.11/html/managing_and_allocating_storage_resources/reclaiming-space-on-target-volumes_rhodf) için  [csi-addons](https://github.com/csi-addons/kubernetes-csi-addons/tree/main) kurulumu yapılır:
+
 
 ```sh
 echo "########################   csi-addons CRD yükleniyor...   ########################"
@@ -228,6 +229,8 @@ spec:
         claimName: test-ceph-external-pvc
 ```
 
+![](img/image-5.png)
+
 ### External Mod Kurulumunu Kaldırma
 
 1-) uninstall-external.sh scripti çalıştırılır.
@@ -235,3 +238,6 @@ spec:
 ```sh
 ./uninstall-external.sh
 ```
+
+### Sonuç
+![](img/image-6.png)
