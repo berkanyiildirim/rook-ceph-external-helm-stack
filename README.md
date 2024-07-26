@@ -53,7 +53,7 @@ echo "########################   csi-addons konfigurasyonları yapılıyor...   
 kubectl apply -f csi-addons-config.yaml
 ```
 
-5-) ArgoCD üzerinden **ceph-cluster** (helm-stack altında) projesi oluşturularak senkronize edilir. Senkronizasyon zaman alabilir. rook-ceph namespacesinin durumu:
+5-) ArgoCD üzerinden **cluster** (helm-stack altında) projesi oluşturularak senkronize edilir. Senkronizasyon zaman alabilir. rook-ceph namespacesinin durumu:
 
 ![](img/image-3.png)
 
@@ -90,6 +90,8 @@ kubectl apply -f csi-addons-config.yaml
 #### CEPH Dashboard
 * nodePort: 30002 üzerinden erişilir.
 * nodePort: 30003 RGW uçnoktası.
+
+Başlangıç parolası:
 ```sh
 kubectl -n rook-ceph get secret rook-ceph-dashboard-password -o jsonpath="{['data']['password']}" | base64 --decode && echo
 ```
@@ -98,7 +100,6 @@ kubectl -n rook-ceph get secret rook-ceph-dashboard-password -o jsonpath="{['dat
 
 #### Alertmanager
 * nodePort: 30007 üzerinden erişilir.
-* varsayılan kullanıcı: admin  parola: prom-operator
 
 #### Grafana
 * nodePort: 30006 üzerinden erişilir.
