@@ -12,6 +12,9 @@ Rook, küme dışında kurulu olan herhangi bir Ceph veya Rook depolama sistemin
 
 ## Merkezi Rook-Ceph Kurulumu
 
+
+[Rook ile Kubernetes Üzerinde Depolama Orkestrasyonu Sunumu](https://www.youtube.com/watch?v=YFDpM1M4vo8)
+
 ### Ön Gereksinimler
 
 * [Minimum donanım önerileri](https://docs.ceph.com/en/quincy/start/hardware-recommendations/#minimum-hardware-recommendations)
@@ -108,7 +111,6 @@ kubectl -n rook-ceph get secret rook-ceph-dashboard-password -o jsonpath="{['dat
 Örnek CEPH izleme dashboardları eklenebilir:  
 * [Ceph Cluster](https://grafana.com/grafana/dashboards/2842-ceph-cluster/) 
 * [Ceph - CephFS](https://grafana.com/grafana/dashboards/9340-ceph-cephfs/)
-* [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack)
 * [Ceph - Pools](https://grafana.com/grafana/dashboards/5342-ceph-pools/)
 
 
